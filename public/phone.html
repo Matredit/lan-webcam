@@ -207,13 +207,18 @@
       left: 0;
       width: 100vw;
       height: 100vh;
+      width: 100dvw;
+      height: 100dvh;
       background: #000000;
-      z-index: 9999;
+      z-index: 99999;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       color: #333333;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
     }
     #blackout-overlay.active {
       display: flex;
@@ -234,9 +239,9 @@
   <video id="dummy-video" autoplay muted playsinline style="position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></video>
 
   <!-- Blackout mode overlay for AMOLED screen saving -->
-  <div id="blackout-overlay" onclick="toggleBlackout()">
+  <div id="blackout-overlay">
     <div class="pulsing-indicator"></div>
-    <div>Live • Tap anywhere to wake controls</div>
+    <div id="blackout-hint">Live • Tap 5 times in 2s to wake</div>
   </div>
 
   <header>
@@ -297,7 +302,7 @@
         </select>
       </div>
 
-      <button id="blackout-btn" class="btn btn-secondary" onclick="toggleBlackout()">
+      <button id="blackout-btn" class="btn btn-secondary" onclick="enterBlackout()">
         🌙 Blackout Mode (Max Battery)
       </button>
     </div>
@@ -786,8 +791,110 @@
       }
     }
 
+    // Fullscreen Helpers
+    async function enterFullscreen() {
+      const elem = document.documentElement;
+      try {
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          await elem.webkitRequestFullscreen();
+        } else if (elem.mozRequestFullScreen) {
+          await elem.mozRequestFullScreen();
+        } else if (elem.msRequestFullscreen) {
+          await elem.msRequestFullscreen();
+        }
+      } catch (err) {
+        console.warn('[Fullscreen] Could not enter fullscreen:', err);
+      }
+    }
+
+    async function exitFullscreen() {
+      try {
+        if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            await document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            await document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            await document.msExitFullscreen();
+          }
+        }
+      } catch (err) {
+        console.warn('[Fullscreen] Could not exit fullscreen:', err);
+      }
+    }
+
+    // Blackout Mode (Fullscreen + 5 taps within 2s to wake)
+    let tapTimestamps = [];
+    let hintResetTimeout = null;
+
+    async function enterBlackout() {
+      tapTimestamps = [];
+      resetBlackoutHint();
+      blackoutOverlay.classList.add('active');
+      await enterFullscreen();
+    }
+
+    async function exitBlackout() {
+      tapTimestamps = [];
+      if (hintResetTimeout) {
+        clearTimeout(hintResetTimeout);
+        hintResetTimeout = null;
+      }
+      blackoutOverlay.classList.remove('active');
+      resetBlackoutHint();
+      await exitFullscreen();
+    }
+
+    function resetBlackoutHint() {
+      const hintEl = document.getElementById('blackout-hint');
+      if (hintEl) {
+        hintEl.textContent = 'Live • Tap 5 times in 2s to wake';
+        hintEl.style.color = '#333333';
+      }
+    }
+
+    function handleBlackoutTap(e) {
+      if (e.isPrimary === false) return;
+      e.preventDefault();
+
+      const now = Date.now();
+      // Keep only taps within the last 2000ms (2 seconds)
+      tapTimestamps = tapTimestamps.filter(t => now - t <= 2000);
+      tapTimestamps.push(now);
+
+      const remaining = 5 - tapTimestamps.length;
+      const hintEl = document.getElementById('blackout-hint');
+
+      if (tapTimestamps.length >= 5) {
+        exitBlackout();
+        return;
+      }
+
+      if (hintEl) {
+        hintEl.textContent = `Tap ${remaining} more time${remaining > 1 ? 's' : ''} to wake...`;
+        hintEl.style.color = '#60a5fa';
+      }
+
+      if (hintResetTimeout) clearTimeout(hintResetTimeout);
+      hintResetTimeout = setTimeout(() => {
+        tapTimestamps = [];
+        resetBlackoutHint();
+      }, 2000);
+    }
+
+    blackoutOverlay.addEventListener('pointerdown', handleBlackoutTap);
+
+    // Backward-compat helper
     function toggleBlackout() {
-      blackoutOverlay.classList.toggle('active');
+      if (blackoutOverlay.classList.contains('active')) {
+        exitBlackout();
+      } else {
+        enterBlackout();
+      }
     }
   </script>
 </body>
