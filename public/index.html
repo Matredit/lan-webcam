@@ -75,6 +75,19 @@
       background: rgba(16, 185, 129, 0.15);
       color: var(--success);
     }
+    .badge-frozen {
+      background: rgba(239, 68, 68, 0.25);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .badge-frozen .dot {
+      background: #ef4444;
+      animation: alertBlink 0.8s infinite;
+    }
+    @keyframes alertBlink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
     .dot {
       width: 7px;
       height: 7px;
@@ -98,6 +111,41 @@
       justify-content: center;
       background: #000000;
       overflow: hidden;
+      transition: box-shadow 0.2s ease;
+    }
+    #viewport-container.frozen {
+      box-shadow: inset 0 0 0 6px #ef4444;
+    }
+
+    /* Frozen Warning Alert Banner */
+    #freeze-alert {
+      position: absolute;
+      top: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(220, 38, 38, 0.95);
+      backdrop-filter: blur(10px);
+      color: #ffffff;
+      padding: 0.7rem 1.6rem;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: none;
+      align-items: center;
+      gap: 0.65rem;
+      box-shadow: 0 10px 25px rgba(220, 38, 38, 0.5), 0 0 15px rgba(239, 68, 68, 0.5);
+      z-index: 30;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      animation: alertPulse 1.5s infinite;
+      letter-spacing: 0.02em;
+      pointer-events: none;
+    }
+    #freeze-alert.active {
+      display: flex;
+    }
+    @keyframes alertPulse {
+      0%, 100% { box-shadow: 0 10px 25px rgba(220, 38, 38, 0.5), 0 0 15px rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 10px 32px rgba(220, 38, 38, 0.8), 0 0 25px rgba(239, 68, 68, 0.7); }
     }
 
     video {
@@ -251,11 +299,21 @@
   </header>
 
   <main id="viewport-container">
+    <!-- Frozen Warning Alert Banner -->
+    <div id="freeze-alert">
+      <span style="font-size: 1.1rem;">⚠️</span>
+      <span id="freeze-alert-text">STREAM FROZEN — Stalled</span>
+    </div>
+
     <!-- Active Video Element -->
     <video id="remote-video" autoplay playsinline muted></video>
 
     <!-- Stats Overlay -->
     <div id="stats-overlay" class="stats-overlay">
+      <div class="stat-line">
+        <span class="stat-title">Frame Freshness:</span>
+        <span id="stat-freshness" class="stat-val" style="color: #10b981;">--</span>
+      </div>
       <div class="stat-line">
         <span class="stat-title">Resolution:</span>
         <span id="stat-res" class="stat-val">--</span>
@@ -331,6 +389,86 @@
     const statRtt = document.getElementById('stat-rtt');
     const phoneUrlText = document.getElementById('phone-url-text');
     const pipBtn = document.getElementById('pip-btn');
+    const freezeAlert = document.getElementById('freeze-alert');
+    const freezeAlertText = document.getElementById('freeze-alert-text');
+    const statFreshness = document.getElementById('stat-freshness');
+    const viewportContainer = document.getElementById('viewport-container');
+
+    // Freeze Watchdog State
+    let lastFramePresentedTime = 0;
+    let isStreamFrozen = false;
+    let freezeWatchdogInterval = null;
+    let prevFramesDecoded = 0;
+
+    function onFramePresented(now, metadata) {
+      lastFramePresentedTime = performance.now();
+      if (isStreamFrozen) {
+        setFrozenState(false);
+      }
+      if ('requestVideoFrameCallback' in remoteVideo) {
+        remoteVideo.requestVideoFrameCallback(onFramePresented);
+      }
+    }
+
+    function setFrozenState(frozen, customMessage) {
+      if (isStreamFrozen === frozen && !customMessage) return;
+      isStreamFrozen = frozen;
+
+      if (frozen) {
+        viewportContainer.classList.add('frozen');
+        freezeAlert.classList.add('active');
+        if (customMessage) {
+          freezeAlertText.textContent = customMessage;
+        }
+        updateBadge('badge-frozen', '🔴 STREAM FROZEN');
+      } else {
+        viewportContainer.classList.remove('frozen');
+        freezeAlert.classList.remove('active');
+        updateBadge('badge-live', 'Live Feed Connected');
+      }
+    }
+
+    function startFreezeWatchdog() {
+      stopFreezeWatchdog();
+      lastFramePresentedTime = performance.now();
+      setFrozenState(false);
+
+      if ('requestVideoFrameCallback' in remoteVideo) {
+        remoteVideo.requestVideoFrameCallback(onFramePresented);
+      }
+
+      freezeWatchdogInterval = setInterval(() => {
+        if (!remoteVideo.classList.contains('active')) return;
+
+        const timeSinceLastFrame = (performance.now() - lastFramePresentedTime) / 1000;
+
+        if (timeSinceLastFrame >= 1.2) {
+          setFrozenState(true);
+          const elapsedSec = timeSinceLastFrame.toFixed(1);
+          freezeAlertText.textContent = `🔴 STREAM FROZEN — Stalled for ${elapsedSec}s`;
+          updateBadge('badge-frozen', `🔴 FROZEN (${elapsedSec}s)`);
+          if (statFreshness) {
+            statFreshness.textContent = `FROZEN (${elapsedSec}s)`;
+            statFreshness.style.color = '#ef4444';
+          }
+        } else {
+          setFrozenState(false);
+          if (statFreshness) {
+            const ms = Math.round(timeSinceLastFrame * 1000);
+            statFreshness.textContent = `${ms} ms ago`;
+            statFreshness.style.color = '#10b981';
+          }
+        }
+      }, 150);
+    }
+
+    function stopFreezeWatchdog() {
+      if (freezeWatchdogInterval) {
+        clearInterval(freezeWatchdogInterval);
+        freezeWatchdogInterval = null;
+      }
+      setFrozenState(false);
+    }
 
     // Fetch network info
     fetch('/api/info')
@@ -423,6 +561,20 @@
         if (event.streams && event.streams[0]) {
           remoteVideo.srcObject = event.streams[0];
           showVideoUI();
+          startFreezeWatchdog();
+
+          const videoTrack = event.track || event.streams[0].getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onmute = () => {
+              console.warn('[WebRTC] Remote video track muted');
+              setFrozenState(true, '🔴 STREAM FROZEN — Camera paused or backgrounded');
+            };
+            videoTrack.onunmute = () => {
+              console.log('[WebRTC] Remote video track unmuted');
+              lastFramePresentedTime = performance.now();
+              setFrozenState(false);
+            };
+          }
         }
       };
 
@@ -435,6 +587,7 @@
         } else if (state === 'disconnected' || state === 'failed') {
           updateBadge('badge-waiting', 'Reconnecting...');
           stopStatsTelemetry();
+          setFrozenState(true, '🔴 STREAM FROZEN — Connection lost');
         }
       };
 
@@ -465,6 +618,7 @@
     }
 
     function resetUI() {
+      stopFreezeWatchdog();
       closePeerConnection();
       stopStatsTelemetry();
       remoteVideo.srcObject = null;
@@ -474,6 +628,7 @@
     }
 
     function closePeerConnection() {
+      stopFreezeWatchdog();
       if (peerConnection) {
         peerConnection.close();
         peerConnection = null;
@@ -501,6 +656,12 @@
               }
               if (report.framesPerSecond !== undefined) {
                 statFps.textContent = `${Math.round(report.framesPerSecond)} fps`;
+              }
+              if (report.framesDecoded !== undefined) {
+                if (report.framesDecoded > prevFramesDecoded) {
+                  lastFramePresentedTime = performance.now();
+                }
+                prevFramesDecoded = report.framesDecoded;
               }
               if (report.bytesReceived !== undefined && prevBytes > 0) {
                 const bitDelta = (report.bytesReceived - prevBytes) * 8;
