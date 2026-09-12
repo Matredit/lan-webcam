@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>IP Camera - Sender</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --card-bg: #111111;
+      --border: #222222;
+      --text: #e5e7eb;
+      --text-muted: #6b7280;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 1.25rem;
+      user-select: none;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .badge-disconnected {
+      background: rgba(107, 114, 128, 0.2);
+      color: var(--text-muted);
+    }
+    .badge-ready {
+      background: rgba(217, 119, 6, 0.2);
+      color: var(--warning);
+    }
+    .badge-live {
+      background: rgba(22, 163, 74, 0.2);
+      color: var(--success);
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .badge-live .dot {
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Main Info Area (NO video element to maximize battery) */
+    .status-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      margin: 1.25rem 0;
+      text-align: center;
+    }
+    .status-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.35rem;
+    }
+    .status-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      line-height: 1.4;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+    }
+    .stat-item {
+      background: #181818;
+      border: 1px solid #282828;
+      border-radius: 8px;
+      padding: 0.6rem;
+      text-align: left;
+    }
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      margin-bottom: 0.15rem;
+    }
+    .stat-value {
+      font-family: monospace;
+      font-weight: 600;
+      color: #f3f4f6;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .btn {
+      width: 100%;
+      padding: 0.9rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #ffffff;
+    }
+    .btn-stop {
+      background: var(--danger);
+      color: #ffffff;
+    }
+    .btn-secondary {
+      background: #1e1e1e;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .select-group {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.85rem;
+    }
+    select {
+      background: #1e1e1e;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    /* Battery Notice */
+    .battery-notice {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    /* Blackout Overlay for Maximum AMOLED Battery Saving */
+    #blackout-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: #000000;
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333333;
+      font-size: 0.8rem;
+    }
+    #blackout-overlay.active {
+      display: flex;
+    }
+    .pulsing-indicator {
+      width: 6px;
+      height: 6px;
+      background: #16a34a;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #16a34a;
+      animation: pulse 2s infinite;
+      margin-bottom: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Blackout mode overlay for AMOLED screen saving -->
+  <div id="blackout-overlay" onclick="toggleBlackout()">
+    <div class="pulsing-indicator"></div>
+    <div>Live • Double-tap to wake controls</div>
+  </div>
+
+  <header>
+    <div class="brand">📷 WebRTC Camera</div>
+    <div id="status-badge" class="badge badge-disconnected">
+      <span class="dot"></span>
+      <span id="status-text">Connecting...</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="status-panel">
+      <div id="stream-state" class="status-title">Ready to Stream</div>
+      <div id="stream-subtext" class="status-desc">
+        No preview rendered to save battery. Camera streams directly to PC over LAN via WebRTC.
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">PC Receiver</div>
+          <div id="receiver-state" class="stat-value">Waiting...</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">WebRTC Peer</div>
+          <div id="webrtc-state" class="stat-value">Idle</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Resolution</div>
+          <div id="active-res" class="stat-value">640x480</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Wake Lock</div>
+          <div id="wakelock-state" class="stat-value">Inactive</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="toggle-stream-btn" class="btn btn-primary" onclick="toggleStreaming()">
+        <span>▶ Start Streaming</span>
+      </button>
+
+      <div class="btn-row">
+        <button id="switch-cam-btn" class="btn btn-secondary" onclick="switchCamera()">
+          🔄 Flip Camera
+        </button>
+        <button id="torch-btn" class="btn btn-secondary" onclick="toggleTorch()">
+          🔦 Flashlight
+        </button>
+      </div>
+
+      <div class="select-group">
+        <span>Latency / Quality</span>
+        <select id="res-select" onchange="changeResolution()">
+          <option value="480p" selected>480p (Lowest Latency)</option>
+          <option value="360p">360p (Ultra Fast)</option>
+          <option value="720p">720p (Standard)</option>
+        </select>
+      </div>
+
+      <button id="blackout-btn" class="btn btn-secondary" onclick="toggleBlackout()">
+        🌙 Blackout Mode (Max Battery)
+      </button>
+    </div>
+  </main>
+
+  <footer>
+    <div class="battery-notice">
+      🔋 Battery saving active: Display rendering disabled. Dark AMOLED theme.
+    </div>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // State
+    let isStreaming = false;
+    let localStream = null;
+    let peerConnection = null;
+    let isReceiverConnected = false;
+    let currentFacingMode = 'environment'; // Back camera default
+    let torchActive = false;
+    let wakeLockSentinel = null;
+    let pendingCandidates = [];
+    let remoteDescriptionSet = false;
+
+    // Elements
+    const statusBadge = document.getElementById('status-badge');
+    const statusText = document.getElementById('status-text');
+    const streamState = document.getElementById('stream-state');
+    const streamSubtext = document.getElementById('stream-subtext');
+    const receiverState = document.getElementById('receiver-state');
+    const webrtcState = document.getElementById('webrtc-state');
+    const activeRes = document.getElementById('active-res');
+    const wakelockState = document.getElementById('wakelock-state');
+    const toggleBtn = document.getElementById('toggle-stream-btn');
+    const blackoutOverlay = document.getElementById('blackout-overlay');
+    const resSelect = document.getElementById('res-select');
+    const torchBtn = document.getElementById('torch-btn');
+
+    // Resolution constraints mapping
+    const RESOLUTION_CONFIG = {
+      '360p': { width: { ideal: 480 }, height: { ideal: 360 }, maxBitrate: 800000 },
+      '480p': { width: { ideal: 640 }, height: { ideal: 480 }, maxBitrate: 1500000 },
+      '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, maxBitrate: 2500000 }
+    };
+
+    // Socket.io connection
+    const socket = io();
+
+    socket.on('connect', () => {
+      updateStatus('badge-ready', 'Server Connected');
+      socket.emit('register', { role: 'sender' });
+    });
+
+    socket.on('disconnect', () => {
+      updateStatus('badge-disconnected', 'Disconnected');
+      receiverState.textContent = 'Disconnected';
+      closePeerConnection();
+    });
+
+    socket.on('peer-joined', ({ role }) => {
+      if (role === 'receiver') {
+        console.log('[Signaling] PC Receiver connected!');
+        isReceiverConnected = true;
+        receiverState.textContent = 'Connected (Online)';
+        if (isStreaming) {
+          // PC joined after streaming already started: initiate WebRTC negotiation
+          negotiatePeerConnection();
+        }
+      }
+    });
+
+    socket.on('request-offer', () => {
+      console.log('[Signaling] PC requested offer');
+      isReceiverConnected = true;
+      receiverState.textContent = 'Connected (Online)';
+      if (isStreaming) {
+        negotiatePeerConnection();
+      }
+    });
+
+    socket.on('peer-left', ({ role }) => {
+      if (role === 'receiver') {
+        console.log('[Signaling] PC Receiver disconnected');
+        isReceiverConnected = false;
+        receiverState.textContent = 'Waiting...';
+        webrtcState.textContent = 'Idle';
+        closePeerConnection();
+      }
+    });
+
+    socket.on('signal', async (data) => {
+      if (!peerConnection) return;
+
+      try {
+        if (data.type === 'answer') {
+          console.log('[WebRTC] Received answer from PC');
+          await peerConnection.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: data.sdp }));
+          remoteDescriptionSet = true;
+
+          // Flush any buffered candidates
+          for (const cand of pendingCandidates) {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(cand));
+          }
+          pendingCandidates = [];
+        } else if (data.type === 'candidate' && data.candidate) {
+          if (!remoteDescriptionSet) {
+            pendingCandidates.push(data.candidate);
+          } else {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+          }
+        }
+      } catch (err) {
+        console.error('[WebRTC] Signal error:', err);
+      }
+    });
+
+    function updateStatus(badgeClass, text) {
+      statusBadge.className = 'badge ' + badgeClass;
+      statusText.textContent = text;
+    }
+
+    // Wake Lock management to prevent screen sleep
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request('screen');
+          wakelockState.textContent = 'Active (Screen ON)';
+          wakeLockSentinel.addEventListener('release', () => {
+            wakelockState.textContent = 'Released';
+          });
+        } catch (err) {
+          console.warn('[WakeLock] Error:', err);
+          wakelockState.textContent = 'Not supported';
+        }
+      } else {
+        wakelockState.textContent = 'Not supported';
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release();
+        wakeLockSentinel = null;
+        wakelockState.textContent = 'Inactive';
+      }
+    }
+
+    // Camera Acquisition
+    async function startCamera() {
+      const resConfig = RESOLUTION_CONFIG[resSelect.value] || RESOLUTION_CONFIG['480p'];
+      const constraints = {
+        audio: false, // video only for lowest latency
+        video: {
+          facingMode: currentFacingMode,
+          width: resConfig.width,
+          height: resConfig.height,
+          frameRate: { ideal: 30, max: 30 }
+        }
+      };
+
+      console.log('[Camera] Requesting getUserMedia with:', constraints);
+      localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const videoTrack = localStream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+      activeRes.textContent = `${settings.width || '480'}x${settings.height || '360'} @ ${Math.round(settings.frameRate || 30)}fps`;
+
+      // Check torch support
+      const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+      if (!capabilities.torch) {
+        torchBtn.style.opacity = '0.4';
+      } else {
+        torchBtn.style.opacity = '1';
+      }
+
+      return localStream;
+    }
+
+    function stopCamera() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+    }
+
+    // WebRTC Peer Connection
+    function createPeerConnection() {
+      closePeerConnection();
+      remoteDescriptionSet = false;
+      pendingCandidates = [];
+
+      // Local LAN connection: Google STUN provided as fallback, host ICE connects directly
+      const rtcConfig = {
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        bundlePolicy: 'max-bundle',
+        rtcpMuxPolicy: 'require'
+      };
+
+      peerConnection = new RTCPeerConnection(rtcConfig);
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal', {
+            type: 'candidate',
+            candidate: event.candidate
+          });
+        }
+      };
+
+      peerConnection.onconnectionstatechange = () => {
+        const state = peerConnection.connectionState;
+        console.log('[WebRTC] Connection state:', state);
+        webrtcState.textContent = state;
+
+        if (state === 'connected') {
+          updateStatus('badge-live', 'Streaming Live');
+          streamState.textContent = '🟢 Streaming to PC';
+          streamSubtext.textContent = 'Transmitting low-latency WebRTC video over LAN.';
+        } else if (state === 'disconnected' || state === 'failed') {
+          updateStatus('badge-ready', 'Reconnecting...');
+          webrtcState.textContent = state;
+        }
+      };
+
+      // Add camera tracks to peer connection
+      if (localStream) {
+        localStream.getTracks().forEach(track => {
+          const sender = peerConnection.addTrack(track, localStream);
+          // Apply bandwidth cap to maintain tight latency
+          const resConfig = RESOLUTION_CONFIG[resSelect.value] || RESOLUTION_CONFIG['480p'];
+          const params = sender.getParameters();
+          if (params.encodings && params.encodings.length > 0) {
+            params.encodings[0].maxBitrate = resConfig.maxBitrate;
+            sender.setParameters(params).catch(() => {});
+          }
+        });
+      }
+
+      return peerConnection;
+    }
+
+    async function negotiatePeerConnection() {
+      if (!peerConnection) {
+        createPeerConnection();
+      }
+
+      try {
+        console.log('[WebRTC] Creating offer...');
+        const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: false,
+          offerToReceiveVideo: false
+        });
+
+        // Set local description
+        await peerConnection.setLocalDescription(offer);
+
+        // Send offer to PC receiver
+        socket.emit('signal', {
+          type: 'offer',
+          sdp: offer.sdp
+        });
+      } catch (err) {
+        console.error('[WebRTC] Negotiation error:', err);
+      }
+    }
+
+    function closePeerConnection() {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      remoteDescriptionSet = false;
+      pendingCandidates = [];
+      webrtcState.textContent = 'Idle';
+    }
+
+    // User Actions
+    async function toggleStreaming() {
+      if (isStreaming) {
+        // Stop Streaming
+        isStreaming = false;
+        closePeerConnection();
+        stopCamera();
+        releaseWakeLock();
+
+        toggleBtn.className = 'btn btn-primary';
+        toggleBtn.innerHTML = '<span>▶ Start Streaming</span>';
+        streamState.textContent = 'Stream Stopped';
+        streamSubtext.textContent = 'Tap Start Streaming when ready.';
+        updateStatus('badge-ready', 'Ready');
+      } else {
+        // Start Streaming
+        try {
+          toggleBtn.disabled = true;
+          toggleBtn.textContent = 'Starting Camera...';
+
+          await startCamera();
+          await requestWakeLock();
+          createPeerConnection();
+
+          isStreaming = true;
+          toggleBtn.disabled = false;
+          toggleBtn.className = 'btn btn-stop';
+          toggleBtn.innerHTML = '<span>⏹ Stop Streaming</span>';
+          streamState.textContent = 'Camera Active';
+          streamSubtext.textContent = isReceiverConnected
+            ? 'Connecting to PC receiver...'
+            : 'Open http://localhost:3000 on PC to view feed.';
+
+          if (isReceiverConnected) {
+            await negotiatePeerConnection();
+          }
+        } catch (err) {
+          console.error('[Camera] Failed to start:', err);
+          alert('Could not access camera: ' + err.message + '\n\nMake sure the chrome://flags unsafely-treat-insecure-origin-as-secure flag is enabled for this URL.');
+          toggleBtn.disabled = false;
+          toggleBtn.className = 'btn btn-primary';
+          toggleBtn.innerHTML = '<span>▶ Start Streaming</span>';
+        }
+      }
+    }
+
+    async function switchCamera() {
+      currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+      if (!isStreaming) return;
+
+      try {
+        stopCamera();
+        await startCamera();
+        const newTrack = localStream.getVideoTracks()[0];
+
+        if (peerConnection) {
+          const senders = peerConnection.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(newTrack);
+          } else {
+            await negotiatePeerConnection();
+          }
+        }
+      } catch (err) {
+        console.error('[Camera] Switch error:', err);
+      }
+    }
+
+    async function toggleTorch() {
+      if (!localStream) return;
+      const track = localStream.getVideoTracks()[0];
+      if (!track) return;
+
+      try {
+        torchActive = !torchActive;
+        await track.applyConstraints({
+          advanced: [{ torch: torchActive }]
+        });
+        torchBtn.style.background = torchActive ? '#d97706' : '#1e1e1e';
+      } catch (err) {
+        console.warn('[Torch] Not supported on this camera/browser:', err);
+        torchActive = false;
+      }
+    }
+
+    async function changeResolution() {
+      if (!isStreaming) return;
+      try {
+        stopCamera();
+        await startCamera();
+        const newTrack = localStream.getVideoTracks()[0];
+
+        if (peerConnection) {
+          const senders = peerConnection.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            await videoSender.replaceTrack(newTrack);
+            const resConfig = RESOLUTION_CONFIG[resSelect.value];
+            const params = videoSender.getParameters();
+            if (params.encodings && params.encodings.length > 0) {
+              params.encodings[0].maxBitrate = resConfig.maxBitrate;
+              videoSender.setParameters(params).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[Resolution] Error changing resolution:', err);
+      }
+    }
+
+    function toggleBlackout() {
+      blackoutOverlay.classList.toggle('active');
+    }
+  </script>
+</body>
+</html>

@@ -1,49 +1,51 @@
-# LAN IP Webcam (Test Phase)
+# Ultra-Low Latency LAN WebRTC IP Webcam
 
-A minimal, zero-dependency Node.js server to verify LAN connectivity between your PC and Android phone before adding camera streaming.
+Stream live video from your Android phone's camera directly to your PC browser over your local network using peer-to-peer WebRTC.
 
-## 1. Firewall Management (UFW)
+## Highlights
+- **Ultra-Low Latency**: Direct WebRTC peer-to-peer streaming over LAN (< 50ms latency).
+- **Maximum Battery Saving on Phone**:
+  - **Zero preview rendering**: Camera frames are piped directly to WebRTC tracks without canvas or video rendering on the phone.
+  - **AMOLED Pitch-Black Theme**: Pixels are unlit.
+  - **Blackout Mode**: Turns off UI completely to a pure black screen with a discreet live indicator; double-tap wakes controls.
+  - **Screen Wake Lock**: Prevents phone from sleeping while streaming.
+- **PC Dashboard**:
+  - Full-resolution live playback.
+  - Real-time WebRTC telemetry (resolution, FPS, bitrate, network RTT).
+  - Snapshot capture and Picture-in-Picture support.
+- **Quick Connection**: Terminal & web QR codes via `qrencode`.
 
-Following the LocalSend style, only open the specific TCP port when running the server, and remove it when finished.
+---
 
-### To Open:
+## 1. Firewall (Host Terminal)
+
+Open port `3000/tcp` (LocalSend style):
 ```bash
-sudo ufw allow 3000/tcp comment 'webcam-test'
+sudo ufw allow 3000/tcp comment 'webcam'
 ```
 
-### To Close (when finished):
+When finished:
 ```bash
 sudo ufw delete allow 3000/tcp
 ```
 
 ---
 
-## 2. Running the Server
+## 2. Start the Server
 
-Start the server:
 ```bash
-node server.mjs
+npm start
 ```
-or customize the port:
-```bash
-PORT=8080 node server.mjs
-```
+*(or `node server.mjs`, or `PORT=8080 node server.mjs`)*
 
 ---
 
-## 3. Connecting from Phone
+## 3. Usage
 
-1. Ensure your phone is connected to the same Wi-Fi network (`192.168.0.x`).
-2. Scan the QR code printed in your terminal or navigate to:
-   ```
-   http://192.168.0.102:3000
-   ```
-3. Tap **"Test Latency (Ping)"** on your phone to verify bidirectional communication.
-
----
-
-## 4. Next Step: Camera Streaming Preview
-
-Since you are using **Android** to stream the camera to your PC, browsers require a **Secure Context** for camera access (`navigator.mediaDevices.getUserMedia`). When we build the video feature, we can support either:
-- **Local HTTPS**: Node server provides a local SSL certificate.
-- **Chrome Flag**: Enabling `chrome://flags/#unsafely-treat-insecure-origin-as-secure` in Android Chrome for `http://192.168.0.102:3000`.
+1. **PC Viewer**: Open `http://localhost:3000` in your PC browser.
+2. **Phone Camera**:
+   - Point your Android phone camera at the QR code printed in the terminal or on the PC screen.
+   - Or navigate directly to `http://192.168.0.102:3000/phone`.
+3. Tap **"Start Streaming"** on the phone.
+4. Video will appear on the PC immediately with sub-50ms latency.
+5. Tap **"Blackout Mode"** on the phone to turn off display elements and conserve maximum battery.
