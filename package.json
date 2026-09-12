@@ -1,0 +1,9 @@
+{
+  "name": "lan-webcam-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "LAN server for testing connection and future camera streaming",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
