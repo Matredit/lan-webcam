@@ -396,11 +396,23 @@
 
     // Freeze Watchdog State
     let lastFramePresentedTime = 0;
+    let lastPresentedFrameId = -1;
     let isStreamFrozen = false;
     let freezeWatchdogInterval = null;
     let prevFramesDecoded = 0;
 
     function onFramePresented(now, metadata) {
+      if (metadata && typeof metadata.presentedFrames === 'number') {
+        if (metadata.presentedFrames <= lastPresentedFrameId) {
+          // Repaint of an existing frame, not a newly rendered camera frame
+          if ('requestVideoFrameCallback' in remoteVideo) {
+            remoteVideo.requestVideoFrameCallback(onFramePresented);
+          }
+          return;
+        }
+        lastPresentedFrameId = metadata.presentedFrames;
+      }
+
       lastFramePresentedTime = performance.now();
       if (isStreamFrozen) {
         setFrozenState(false);
@@ -608,6 +620,7 @@
 
     function resetUI() {
       stopFreezeWatchdog();
+      lastPresentedFrameId = -1;
       closePeerConnection();
       stopStatsTelemetry();
       remoteVideo.srcObject = null;
@@ -647,9 +660,6 @@
                 statFps.textContent = `${Math.round(report.framesPerSecond)} fps`;
               }
               if (report.framesDecoded !== undefined) {
-                if (report.framesDecoded > prevFramesDecoded) {
-                  lastFramePresentedTime = performance.now();
-                }
                 prevFramesDecoded = report.framesDecoded;
               }
               if (report.bytesReceived !== undefined && prevBytes > 0) {
