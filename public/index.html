@@ -428,6 +428,8 @@
       }
     }
 
+    const FREEZE_THRESHOLD_SEC = 0.6; // 600ms threshold
+
     function startFreezeWatchdog() {
       stopFreezeWatchdog();
       lastFramePresentedTime = performance.now();
@@ -442,7 +444,7 @@
 
         const timeSinceLastFrame = (performance.now() - lastFramePresentedTime) / 1000;
 
-        if (timeSinceLastFrame >= 1.2) {
+        if (timeSinceLastFrame >= FREEZE_THRESHOLD_SEC) {
           setFrozenState(true);
           const elapsedSec = timeSinceLastFrame.toFixed(1);
           freezeAlertText.textContent = `🔴 STREAM FROZEN — Stalled for ${elapsedSec}s`;
@@ -459,7 +461,7 @@
             statFreshness.style.color = '#10b981';
           }
         }
-      }, 150);
+      }, 100);
     }
 
     function stopFreezeWatchdog() {
@@ -562,19 +564,6 @@
           remoteVideo.srcObject = event.streams[0];
           showVideoUI();
           startFreezeWatchdog();
-
-          const videoTrack = event.track || event.streams[0].getVideoTracks()[0];
-          if (videoTrack) {
-            videoTrack.onmute = () => {
-              console.warn('[WebRTC] Remote video track muted');
-              setFrozenState(true, '🔴 STREAM FROZEN — Camera paused or backgrounded');
-            };
-            videoTrack.onunmute = () => {
-              console.log('[WebRTC] Remote video track unmuted');
-              lastFramePresentedTime = performance.now();
-              setFrozenState(false);
-            };
-          }
         }
       };
 
