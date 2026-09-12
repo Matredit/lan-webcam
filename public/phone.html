@@ -230,10 +230,13 @@
   </style>
 </head>
 <body>
+  <!-- Hidden video element to keep Android media pipeline active without rendering to screen -->
+  <video id="dummy-video" autoplay muted playsinline style="position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></video>
+
   <!-- Blackout mode overlay for AMOLED screen saving -->
   <div id="blackout-overlay" onclick="toggleBlackout()">
     <div class="pulsing-indicator"></div>
-    <div>Live • Double-tap to wake controls</div>
+    <div>Live • Tap anywhere to wake controls</div>
   </div>
 
   <header>
@@ -302,7 +305,9 @@
 
   <footer>
     <div class="battery-notice">
-      🔋 Battery saving active: Display rendering disabled. Dark AMOLED theme.
+      🔋 <strong>Battery Saving Active:</strong> Display rendering is off.<br>
+      ⚠️ <em>Do NOT press the phone's physical power/lock button</em> (Android blocks camera in background).<br>
+      Use <strong>Blackout Mode</strong> to turn off display pixels while keeping the stream alive.
     </div>
   </footer>
 
@@ -417,30 +422,101 @@
     }
 
     // Wake Lock management to prevent screen sleep
+    let wakeLockHeartbeat = null;
+
     async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLockSentinel = await navigator.wakeLock.request('screen');
-          wakelockState.textContent = 'Active (Screen ON)';
-          wakeLockSentinel.addEventListener('release', () => {
-            wakelockState.textContent = 'Released';
-          });
-        } catch (err) {
-          console.warn('[WakeLock] Error:', err);
-          wakelockState.textContent = 'Not supported';
-        }
-      } else {
+      if (!('wakeLock' in navigator)) {
         wakelockState.textContent = 'Not supported';
+        wakelockState.style.color = '#9ca3af';
+        return;
+      }
+
+      if (wakeLockSentinel && !wakeLockSentinel.released) {
+        return;
+      }
+
+      try {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+        wakelockState.textContent = 'Active (Screen ON)';
+        wakelockState.style.color = '#22c55e';
+        console.log('[WakeLock] Acquired successfully');
+
+        wakeLockSentinel.addEventListener('release', () => {
+          console.warn('[WakeLock] Released');
+          if (isStreaming && document.visibilityState === 'visible') {
+            // Re-acquire immediately if released while we are still active and visible
+            wakelockState.textContent = 'Reacquiring...';
+            wakelockState.style.color = '#eab308';
+            requestWakeLock();
+          } else {
+            wakelockState.textContent = 'Released';
+            wakelockState.style.color = '#ef4444';
+          }
+        });
+      } catch (err) {
+        console.warn('[WakeLock] Failed to acquire:', err);
+        wakelockState.textContent = 'Failed (Power Saver?)';
+        wakelockState.style.color = '#ef4444';
+      }
+    }
+
+    function startWakeLockHeartbeat() {
+      stopWakeLockHeartbeat();
+      wakeLockHeartbeat = setInterval(() => {
+        if (isStreaming && document.visibilityState === 'visible') {
+          if (!wakeLockSentinel || wakeLockSentinel.released) {
+            console.log('[WakeLock] Heartbeat re-requesting wake lock...');
+            requestWakeLock();
+          }
+        }
+      }, 15000);
+    }
+
+    function stopWakeLockHeartbeat() {
+      if (wakeLockHeartbeat) {
+        clearInterval(wakeLockHeartbeat);
+        wakeLockHeartbeat = null;
       }
     }
 
     function releaseWakeLock() {
+      stopWakeLockHeartbeat();
       if (wakeLockSentinel) {
-        wakeLockSentinel.release();
+        wakeLockSentinel.release().catch(() => {});
         wakeLockSentinel = null;
         wakelockState.textContent = 'Inactive';
+        wakelockState.style.color = '#f3f4f6';
       }
     }
+
+    // Auto-reacquire WakeLock and recover camera if returning from background/screen-off
+    document.addEventListener('visibilitychange', async () => {
+      console.log('[Lifecycle] Visibility changed:', document.visibilityState);
+      if (document.visibilityState === 'visible' && isStreaming) {
+        await requestWakeLock();
+
+        // Check if camera was killed by Android while hidden/locked
+        const videoTrack = localStream ? localStream.getVideoTracks()[0] : null;
+        if (!videoTrack || videoTrack.readyState === 'ended') {
+          console.warn('[Lifecycle] Camera was terminated while screen locked, recovering...');
+          try {
+            stopCamera();
+            await startCamera();
+            const newTrack = localStream.getVideoTracks()[0];
+            if (peerConnection) {
+              const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+              if (sender) {
+                await sender.replaceTrack(newTrack);
+              } else {
+                await negotiatePeerConnection();
+              }
+            }
+          } catch (err) {
+            console.error('[Lifecycle] Camera recovery error:', err);
+          }
+        }
+      }
+    });
 
     // Camera Acquisition
     async function startCamera() {
@@ -458,6 +534,30 @@
       console.log('[Camera] Requesting getUserMedia with:', constraints);
       localStream = await navigator.mediaDevices.getUserMedia(constraints);
       const videoTrack = localStream.getVideoTracks()[0];
+
+      // Track lifecycle listeners
+      videoTrack.onmute = () => {
+        console.warn('[Camera] Track muted (OS locked screen or backgrounded)');
+        updateStatus('badge-ready', 'Paused by OS (Screen Locked?)');
+      };
+      videoTrack.onunmute = () => {
+        console.log('[Camera] Track unmuted');
+        updateStatus('badge-live', 'Streaming Live');
+      };
+      videoTrack.onended = () => {
+        console.warn('[Camera] Track ended');
+        if (isStreaming) {
+          updateStatus('badge-disconnected', 'Camera Terminated');
+        }
+      };
+
+      // Connect to hidden dummy video element to anchor media pipeline in Android Chrome
+      const dummyVideo = document.getElementById('dummy-video');
+      if (dummyVideo) {
+        dummyVideo.srcObject = localStream;
+        dummyVideo.play().catch(e => console.warn('[DummyVideo] Play error:', e));
+      }
+
       const settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
       activeRes.textContent = `${settings.width || '480'}x${settings.height || '360'} @ ${Math.round(settings.frameRate || 30)}fps`;
 
@@ -476,6 +576,10 @@
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
+      }
+      const dummyVideo = document.getElementById('dummy-video');
+      if (dummyVideo) {
+        dummyVideo.srcObject = null;
       }
     }
 
@@ -592,6 +696,7 @@
 
           await startCamera();
           await requestWakeLock();
+          startWakeLockHeartbeat();
           createPeerConnection();
 
           isStreaming = true;
