@@ -236,12 +236,28 @@
       border-radius: 9999px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       z-index: 10;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.25s ease, transform 0.25s ease;
       max-width: 95vw;
       user-select: none;
     }
     .video-hud.active {
       display: flex;
+    }
+
+    /* Auto-hide in fullscreen mode unless mouse is near bottom or hovering */
+    :fullscreen .video-hud,
+    body.is-fullscreen .video-hud {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(-50%) translateY(20px);
+    }
+    :fullscreen .video-hud.visible,
+    :fullscreen .video-hud:hover,
+    body.is-fullscreen .video-hud.visible,
+    body.is-fullscreen .video-hud:hover {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
     }
 
     .hud-group {
@@ -1029,6 +1045,12 @@
     });
 
     viewportContainer.addEventListener('pointermove', (e) => {
+      const isFs = !!document.fullscreenElement || document.body.classList.contains('is-fullscreen');
+      if (isFs) {
+        const isNearBottom = (window.innerHeight - e.clientY) < 110;
+        videoHud.classList.toggle('visible', isNearBottom);
+      }
+
       if (!isDragging) return;
       if (zoom <= 1) return;
       const dx = e.clientX - startPointerX;
@@ -1036,6 +1058,13 @@
       panX = startPanX + dx;
       panY = startPanY + dy;
       applyTransform(false);
+    });
+
+    viewportContainer.addEventListener('pointerleave', () => {
+      const isFs = !!document.fullscreenElement || document.body.classList.contains('is-fullscreen');
+      if (isFs) {
+        videoHud.classList.remove('visible');
+      }
     });
 
     function handlePointerUp(e) {
@@ -1116,9 +1145,24 @@
       }
     });
 
+    // Fullscreen HUD Auto-Hide when mouse is near bottom
+    function checkFullscreenState() {
+      const isFs = !!document.fullscreenElement || (window.innerHeight >= screen.height - 2);
+      document.body.classList.toggle('is-fullscreen', isFs);
+      if (!isFs) {
+        videoHud.classList.remove('visible');
+      }
+    }
+
     // Window & Fullscreen Resize
-    window.addEventListener('resize', () => updateVideoTransform(false));
-    document.addEventListener('fullscreenchange', () => updateVideoTransform(false));
+    window.addEventListener('resize', () => {
+      checkFullscreenState();
+      updateVideoTransform(false);
+    });
+    document.addEventListener('fullscreenchange', () => {
+      checkFullscreenState();
+      updateVideoTransform(false);
+    });
     remoteVideo.addEventListener('loadedmetadata', () => updateVideoTransform(false));
     remoteVideo.addEventListener('resize', () => updateVideoTransform(false));
 
