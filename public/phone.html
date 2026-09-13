@@ -223,26 +223,14 @@
     #blackout-overlay.active {
       display: flex;
     }
-    .pulsing-indicator {
-      width: 6px;
-      height: 6px;
-      background: #16a34a;
-      border-radius: 50%;
-      box-shadow: 0 0 6px #16a34a;
-      animation: pulse 2s infinite;
-      margin-bottom: 0.75rem;
-    }
   </style>
 </head>
 <body>
   <!-- Hidden video element to keep Android media pipeline active without rendering to screen -->
   <video id="dummy-video" autoplay muted playsinline style="position:fixed;top:-100px;left:-100px;width:1px;height:1px;opacity:0.001;pointer-events:none;"></video>
 
-  <!-- Blackout mode overlay for AMOLED screen saving -->
-  <div id="blackout-overlay">
-    <div class="pulsing-indicator"></div>
-    <div id="blackout-hint">Live • Tap 5 times in 2s to wake</div>
-  </div>
+  <!-- Blackout mode overlay: 100% pure black, zero lit pixels -->
+  <div id="blackout-overlay"></div>
 
   <header>
     <div class="brand">📷 WebRTC Camera</div>
@@ -827,34 +815,19 @@
       }
     }
 
-    // Blackout Mode (Fullscreen + 5 taps within 2s to wake)
+    // Blackout Mode (Fullscreen pure-black + 5 taps within 2s to wake)
     let tapTimestamps = [];
-    let hintResetTimeout = null;
 
     async function enterBlackout() {
       tapTimestamps = [];
-      resetBlackoutHint();
       blackoutOverlay.classList.add('active');
       await enterFullscreen();
     }
 
     async function exitBlackout() {
       tapTimestamps = [];
-      if (hintResetTimeout) {
-        clearTimeout(hintResetTimeout);
-        hintResetTimeout = null;
-      }
       blackoutOverlay.classList.remove('active');
-      resetBlackoutHint();
       await exitFullscreen();
-    }
-
-    function resetBlackoutHint() {
-      const hintEl = document.getElementById('blackout-hint');
-      if (hintEl) {
-        hintEl.textContent = 'Live • Tap 5 times in 2s to wake';
-        hintEl.style.color = '#333333';
-      }
     }
 
     function handleBlackoutTap(e) {
@@ -866,24 +839,9 @@
       tapTimestamps = tapTimestamps.filter(t => now - t <= 2000);
       tapTimestamps.push(now);
 
-      const remaining = 5 - tapTimestamps.length;
-      const hintEl = document.getElementById('blackout-hint');
-
       if (tapTimestamps.length >= 5) {
         exitBlackout();
-        return;
       }
-
-      if (hintEl) {
-        hintEl.textContent = `Tap ${remaining} more time${remaining > 1 ? 's' : ''} to wake...`;
-        hintEl.style.color = '#60a5fa';
-      }
-
-      if (hintResetTimeout) clearTimeout(hintResetTimeout);
-      hintResetTimeout = setTimeout(() => {
-        tapTimestamps = [];
-        resetBlackoutHint();
-      }, 2000);
     }
 
     blackoutOverlay.addEventListener('pointerdown', handleBlackoutTap);
