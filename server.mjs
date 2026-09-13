@@ -24,15 +24,26 @@ function getLocalIpAddresses() {
   for (const name of Object.keys(interfaces)) {
     for (const net of interfaces[name] || []) {
       if (net.family === 'IPv4' && !net.internal) {
-        addresses.push({ iface: name, address: net.address });
+        addresses.push({ iface: name, address: net.address, netmask: net.netmask });
       }
     }
   }
   return addresses;
 }
 
+function calculateSubnet(ip, netmask) {
+  if (!ip || !netmask) return '192.168.0.0/24';
+  const ipParts = ip.split('.').map(Number);
+  const maskParts = netmask.split('.').map(Number);
+  if (ipParts.length !== 4 || maskParts.length !== 4) return '192.168.0.0/24';
+  const netParts = ipParts.map((part, i) => part & maskParts[i]);
+  const prefix = maskParts.reduce((acc, octet) => acc + (octet.toString(2).match(/1/g) || []).length, 0);
+  return `${netParts.join('.')}/${prefix}`;
+}
+
 const localIps = getLocalIpAddresses();
-const primaryLan = localIps.find(i => i.iface === 'enp34s0') || localIps[0] || { iface: 'local', address: '127.0.0.1' };
+const primaryLan = localIps.find(i => i.iface === 'enp34s0') || localIps[0] || { iface: 'local', address: '127.0.0.1', netmask: '255.255.255.0' };
+const lanSubnet = calculateSubnet(primaryLan.address, primaryLan.netmask);
 const phoneUrl = `http://${primaryLan.address}:${PORT}/phone`;
 
 function printTerminalQr(url) {
@@ -126,9 +137,8 @@ server.listen(PORT, HOST, () => {
   console.log(`------------------------------------------------------`);
   console.log(`📱 Scan QR code on your phone to open camera:`);
   printTerminalQr(phoneUrl);
-  console.log(`------------------------------------------------------`);
-  console.log(`🔒 Firewall rules:`);
-  console.log(`   Open:  sudo ufw allow ${PORT}/tcp comment 'webcam'`);
-  console.log(`   Close: sudo ufw delete allow ${PORT}/tcp`);
+  console.log(`🔒 Firewall rules (LAN-only restricted to ${lanSubnet}):`);
+  console.log(`   Open:  sudo ufw allow from ${lanSubnet} to any port ${PORT} proto tcp comment 'webcam'`);
+  console.log(`   Close: sudo ufw delete allow from ${lanSubnet} to any port ${PORT} proto tcp`);
   console.log(`======================================================\n`);
 });

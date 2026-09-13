@@ -19,14 +19,14 @@ Stream live video from your Android phone's camera directly to your PC browser o
 
 ## 1. Firewall (Host Terminal)
 
-Open port `3000/tcp` (LocalSend style):
-```bash
-sudo ufw allow 3000/tcp comment 'webcam'
-```
+Restricted to your local LAN subnet (`192.168.0.0/24`):
 
-When finished:
 ```bash
-sudo ufw delete allow 3000/tcp
+# Open for LAN only:
+sudo ufw allow from 192.168.0.0/24 to any port 3000 proto tcp comment 'webcam'
+
+# Close when finished:
+sudo ufw delete allow from 192.168.0.0/24 to any port 3000 proto tcp
 ```
 
 ---
