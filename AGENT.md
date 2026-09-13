@@ -32,3 +32,7 @@ A low-latency (< 50ms) LAN-only IP webcam application that streams live camera v
 1. **bwrap Sandbox**: The parent environment has a read-only filesystem except this project folder.
 2. **npm Cache**: `.npmrc` is set to `cache=.npm-cache` so `npm install` works without permission errors. Keep external packages to an absolute minimum.
 3. **Firewall**: Runs on host port `3000/tcp` (managed via UFW on the host).
+
+### D. 100% Offline LAN Operation
+1. **Zero External Dependencies**: No CDNs, no external fonts, no external images. Everything is served locally.
+2. **`iceServers: []`**: Both `phone.html` and `index.html` must keep `iceServers: []` (empty array). Do NOT re-add public STUN/TURN servers (e.g. Google STUN). Over local Wi-Fi, WebRTC connects instantly via local host candidates. External STUN servers cause DNS timeouts and packet leaks when disconnected from the internet.
