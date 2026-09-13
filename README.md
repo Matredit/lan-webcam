@@ -7,7 +7,7 @@ Stream live video from your Android phone's camera directly to your PC browser o
 - **Maximum Battery Saving on Phone**:
   - **Zero preview rendering**: Camera frames are piped directly to WebRTC tracks without canvas or video rendering on the phone.
   - **AMOLED Pitch-Black Theme**: Pixels are unlit.
-  - **Blackout Mode**: Enters fullscreen to hide browser UI and blanks the screen completely to pure black pixels; tapping 5 times within 2 seconds exits back to normal controls.
+  - **Blackout Mode**: Enters fullscreen to hide browser UI and blanks the screen completely to pure black pixels; tapping 5 times within 1 second exits back to normal controls.
   - **Screen Wake Lock**: Prevents phone from sleeping while streaming.
 - **PC Dashboard**:
   - Full-resolution live playback.

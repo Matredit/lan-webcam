@@ -815,7 +815,7 @@
       }
     }
 
-    // Blackout Mode (Fullscreen pure-black + 5 taps within 2s to wake)
+    // Blackout Mode (Fullscreen pure-black + 5 taps within 1s to wake)
     let tapTimestamps = [];
 
     async function enterBlackout() {
@@ -835,8 +835,8 @@
       e.preventDefault();
 
       const now = Date.now();
-      // Keep only taps within the last 2000ms (2 seconds)
-      tapTimestamps = tapTimestamps.filter(t => now - t <= 2000);
+      // Keep only taps within the last 1000ms (1 second)
+      tapTimestamps = tapTimestamps.filter(t => now - t <= 1000);
       tapTimestamps.push(now);
 
       if (tapTimestamps.length >= 5) {
