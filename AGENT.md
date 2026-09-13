@@ -7,10 +7,10 @@ A low-latency (< 50ms) LAN-only IP webcam application that streams live camera v
 
 ## 2. Tech Stack & Architecture
 - **Runtime**: Node.js (ESM by default, `"type": "module"`).
-- **Backend**: Express (`server.mjs`) + Socket.IO for WebRTC signaling + `qrencode` for ASCII/SVG QR codes.
+- **Backend**: Express (`server.js`) + Socket.IO for WebRTC signaling + `qrencode` for ASCII/SVG QR codes.
 - **Frontend**: Vanilla HTML/CSS/JS in `public/` (zero build tools, zero external CDNs, Socket.IO client served from `/socket.io/socket.io.js`).
 - **Files**:
-  - `server.mjs`: Static server, Socket.IO signaling (`sender` & `receiver` rooms), `/api/qr`, `/api/info`.
+  - `server.js`: Static server, Socket.IO signaling (`sender` & `receiver` rooms), `/api/qr`, `/api/info`.
   - `public/phone.html`: Mobile camera sender (WebRTC offerer, audio disabled).
   - `public/index.html`: PC receiver dashboard (WebRTC answerer, telemetry HUD, freeze watchdog).
 

@@ -36,7 +36,7 @@ sudo ufw delete allow from 192.168.0.0/24 to any port 3000 proto tcp
 ```bash
 npm start
 ```
-*(or `node server.mjs`, or `PORT=8080 node server.mjs`)*
+*(or `node server.js`, or `PORT=8080 node server.js`)*
 
 ---
 
