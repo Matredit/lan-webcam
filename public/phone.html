@@ -170,24 +170,36 @@
       gap: 0.75rem;
     }
 
-    .select-group {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .select-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 0.65rem 0.9rem;
-      font-size: 0.85rem;
+      padding: 0.65rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
     }
-    select {
+    .select-card label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .select-card select {
       background: #1e1e1e;
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 0.4rem 0.6rem;
-      font-size: 0.85rem;
+      padding: 0.45rem 0.4rem;
+      font-size: 0.82rem;
       outline: none;
+      width: 100%;
     }
 
     /* Battery Notice */
@@ -281,13 +293,25 @@
         </button>
       </div>
 
-      <div class="select-group">
-        <span>Latency / Quality</span>
-        <select id="res-select" onchange="changeResolution()">
-          <option value="480p" selected>480p (Lowest Latency)</option>
-          <option value="360p">360p (Ultra Fast)</option>
-          <option value="720p">720p (Standard)</option>
-        </select>
+      <div class="settings-grid">
+        <div class="select-card">
+          <label for="res-select">Resolution</label>
+          <select id="res-select" onchange="updateCameraSettings()">
+            <option value="360p">360p (480x360)</option>
+            <option value="480p" selected>480p (640x480)</option>
+            <option value="720p">720p (1280x720)</option>
+            <option value="1080p">1080p (1920x1080)</option>
+          </select>
+        </div>
+        <div class="select-card">
+          <label for="fps-select">Framerate</label>
+          <select id="fps-select" onchange="updateCameraSettings()">
+            <option value="15">15 FPS (Battery)</option>
+            <option value="24">24 FPS (Cinema)</option>
+            <option value="30" selected>30 FPS (Standard)</option>
+            <option value="60">60 FPS (Smooth)</option>
+          </select>
+        </div>
       </div>
 
       <button id="blackout-btn" class="btn btn-secondary" onclick="enterBlackout()">
@@ -329,13 +353,15 @@
     const toggleBtn = document.getElementById('toggle-stream-btn');
     const blackoutOverlay = document.getElementById('blackout-overlay');
     const resSelect = document.getElementById('res-select');
+    const fpsSelect = document.getElementById('fps-select');
     const torchBtn = document.getElementById('torch-btn');
 
     // Resolution constraints mapping
     const RESOLUTION_CONFIG = {
       '360p': { width: { ideal: 480 }, height: { ideal: 360 }, maxBitrate: 800000 },
       '480p': { width: { ideal: 640 }, height: { ideal: 480 }, maxBitrate: 1500000 },
-      '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, maxBitrate: 2500000 }
+      '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, maxBitrate: 2500000 },
+      '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 }, maxBitrate: 4500000 }
     };
 
     // Socket.io connection
@@ -514,13 +540,14 @@
     // Camera Acquisition
     async function startCamera() {
       const resConfig = RESOLUTION_CONFIG[resSelect.value] || RESOLUTION_CONFIG['480p'];
+      const targetFps = parseInt(fpsSelect ? fpsSelect.value : '30', 10) || 30;
       const constraints = {
         audio: false, // video only for lowest latency
         video: {
           facingMode: currentFacingMode,
           width: resConfig.width,
           height: resConfig.height,
-          frameRate: { ideal: 30, max: 30 }
+          frameRate: { ideal: targetFps, max: targetFps }
         }
       };
 
@@ -754,7 +781,7 @@
       }
     }
 
-    async function changeResolution() {
+    async function updateCameraSettings() {
       if (!isStreaming) return;
       try {
         stopCamera();
@@ -766,7 +793,7 @@
           const videoSender = senders.find(s => s.track && s.track.kind === 'video');
           if (videoSender) {
             await videoSender.replaceTrack(newTrack);
-            const resConfig = RESOLUTION_CONFIG[resSelect.value];
+            const resConfig = RESOLUTION_CONFIG[resSelect.value] || RESOLUTION_CONFIG['480p'];
             const params = videoSender.getParameters();
             if (params.encodings && params.encodings.length > 0) {
               params.encodings[0].maxBitrate = resConfig.maxBitrate;
@@ -775,9 +802,10 @@
           }
         }
       } catch (err) {
-        console.error('[Resolution] Error changing resolution:', err);
+        console.error('[Settings] Error updating camera settings:', err);
       }
     }
+    const changeResolution = updateCameraSettings;
 
     // Fullscreen Helpers
     async function enterFullscreen() {
