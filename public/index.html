@@ -397,13 +397,14 @@
     // Freeze Watchdog State
     let lastFramePresentedTime = 0;
     let lastPresentedFrameId = -1;
+    let firstFrameRendered = false;
     let isStreamFrozen = false;
     let freezeWatchdogInterval = null;
     let prevFramesDecoded = 0;
 
     function onFramePresented(now, metadata) {
       if (metadata && typeof metadata.presentedFrames === 'number') {
-        if (metadata.presentedFrames <= lastPresentedFrameId) {
+        if (firstFrameRendered && metadata.presentedFrames <= lastPresentedFrameId) {
           // Repaint of an existing frame, not a newly rendered camera frame
           if ('requestVideoFrameCallback' in remoteVideo) {
             remoteVideo.requestVideoFrameCallback(onFramePresented);
@@ -413,10 +414,13 @@
         lastPresentedFrameId = metadata.presentedFrames;
       }
 
+      firstFrameRendered = true;
       lastFramePresentedTime = performance.now();
+
       if (isStreamFrozen) {
         setFrozenState(false);
       }
+
       if ('requestVideoFrameCallback' in remoteVideo) {
         remoteVideo.requestVideoFrameCallback(onFramePresented);
       }
@@ -444,7 +448,8 @@
 
     function startFreezeWatchdog() {
       stopFreezeWatchdog();
-      lastFramePresentedTime = performance.now();
+      firstFrameRendered = false;
+      lastPresentedFrameId = -1;
       setFrozenState(false);
 
       if ('requestVideoFrameCallback' in remoteVideo) {
@@ -453,6 +458,9 @@
 
       freezeWatchdogInterval = setInterval(() => {
         if (!remoteVideo.classList.contains('active')) return;
+
+        // Do not flag frozen until the first frame has actually decoded and rendered
+        if (!firstFrameRendered) return;
 
         const timeSinceLastFrame = (performance.now() - lastFramePresentedTime) / 1000;
 
@@ -481,6 +489,8 @@
         clearInterval(freezeWatchdogInterval);
         freezeWatchdogInterval = null;
       }
+      firstFrameRendered = false;
+      lastPresentedFrameId = -1;
       setFrozenState(false);
     }
 
@@ -530,6 +540,12 @@
       }
     });
 
+    socket.on('stream-stopped', () => {
+      console.log('[Signaling] Phone stopped streaming');
+      updateBadge('badge-waiting', 'Phone Standby • Stream Stopped');
+      resetUI();
+    });
+
     // WebRTC Signaling
     socket.on('signal', async (data) => {
       try {
@@ -549,7 +565,10 @@
     });
 
     async function handleOffer(sdp) {
+      stopFreezeWatchdog();
       closePeerConnection();
+      firstFrameRendered = false;
+      lastPresentedFrameId = -1;
       remoteDescriptionSet = false;
       pendingCandidates = [];
 

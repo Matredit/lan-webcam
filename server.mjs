@@ -110,6 +110,10 @@ io.on('connection', (socket) => {
     socket.to('sender').emit('request-offer');
   });
 
+  socket.on('stream-stopped', () => {
+    socket.to('receiver').emit('stream-stopped');
+  });
+
   socket.on('signal', (data) => {
     // Forward WebRTC signals (offer, answer, ice-candidate) to the opposite peer
     if (socket.role === 'sender') {
