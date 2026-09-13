@@ -111,6 +111,9 @@
       justify-content: center;
       background: #000000;
       overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
       transition: box-shadow 0.2s ease;
     }
     #viewport-container.frozen {
@@ -149,11 +152,15 @@
     }
 
     video {
-      width: 100%;
-      height: 100%;
-      max-height: calc(100vh - 60px);
-      object-fit: contain;
       display: none;
+      flex-shrink: 0;
+      max-width: none;
+      max-height: none;
+      object-fit: contain;
+      transform-origin: center center;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: none;
     }
     video.active {
       display: block;
@@ -214,39 +221,86 @@
       transform: translateX(-50%);
       display: none;
       align-items: center;
-      gap: 0.75rem;
-      background: rgba(17, 24, 39, 0.85);
+      gap: 0.5rem;
+      background: rgba(17, 24, 39, 0.88);
       backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 0.5rem 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 0.4rem 0.8rem;
       border-radius: 9999px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
       z-index: 10;
       transition: opacity 0.3s ease;
+      max-width: 95vw;
+      user-select: none;
     }
     .video-hud.active {
       display: flex;
     }
 
+    .hud-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 9999px;
+      padding: 0.1rem 0.25rem;
+      gap: 0.1rem;
+    }
+
     .hud-btn {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: var(--text);
       cursor: pointer;
-      padding: 0.4rem 0.75rem;
-      border-radius: 6px;
-      font-size: 0.85rem;
+      padding: 0.38rem 0.65rem;
+      border-radius: 9999px;
+      font-size: 0.82rem;
       font-weight: 500;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
-      transition: background 0.15s;
+      gap: 0.35rem;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .hud-btn-icon {
+      padding: 0.3rem 0.55rem;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1;
     }
     .hud-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.12);
     }
     .hud-btn:active {
       transform: scale(0.96);
+    }
+    .hud-btn.active-toggle {
+      background: rgba(59, 130, 246, 0.25);
+      color: #60a5fa;
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    .hud-btn.has-modifications {
+      color: #f59e0b;
+    }
+    .hud-btn.has-modifications:hover {
+      background: rgba(245, 158, 11, 0.2);
+    }
+    .hud-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: monospace;
+      padding: 0 0.35rem;
+      color: #38bdf8;
+      cursor: pointer;
+      user-select: none;
+    }
+    .hud-label:hover {
+      text-decoration: underline;
+    }
+    .hud-sep {
+      width: 1px;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 0 0.15rem;
     }
 
     /* Stats telemetry overlay */
@@ -338,9 +392,29 @@
 
     <!-- Floating HUD controls -->
     <div id="video-hud" class="video-hud">
-      <button class="hud-btn" onclick="toggleFullscreen()">⛶ Fullscreen</button>
-      <button class="hud-btn" onclick="takeSnapshot()">📸 Snapshot</button>
-      <button id="pip-btn" class="hud-btn" onclick="togglePip()">🗔 Popout PiP</button>
+      <div class="hud-group">
+        <button class="hud-btn hud-btn-icon" onclick="zoomOut()" title="Zoom Out (−)">−</button>
+        <span id="zoom-label" class="hud-label" onclick="setZoom(1.0, 0, 0, true)" title="Click to reset zoom (0)">1.0×</span>
+        <button class="hud-btn hud-btn-icon" onclick="zoomIn()" title="Zoom In (+)">+</button>
+      </div>
+
+      <button id="rotate-btn" class="hud-btn" onclick="rotateCW()" title="Rotate 90° Clockwise (R, Shift+R for CCW)">
+        <span>↻</span> <span id="rotate-text">Rotate</span>
+      </button>
+
+      <button id="mirror-btn" class="hud-btn" onclick="toggleMirror()" title="Mirror Horizontal (M)">
+        <span>🪞</span> <span>Mirror</span>
+      </button>
+
+      <button id="reset-btn" class="hud-btn" onclick="resetTransforms()" title="Reset View (0)">
+        <span>↺</span> <span>Reset</span>
+      </button>
+
+      <div class="hud-sep"></div>
+
+      <button class="hud-btn" onclick="takeSnapshot()" title="Save Snapshot Image">📸 Snapshot</button>
+      <button id="pip-btn" class="hud-btn" onclick="togglePip()" title="Popout PiP">🗔 Popout PiP</button>
+      <button class="hud-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen (F)">⛶ Fullscreen</button>
     </div>
 
     <!-- Waiting for Phone Screen -->
@@ -393,6 +467,11 @@
     const freezeAlertText = document.getElementById('freeze-alert-text');
     const statFreshness = document.getElementById('stat-freshness');
     const viewportContainer = document.getElementById('viewport-container');
+    const zoomLabel = document.getElementById('zoom-label');
+    const rotateBtn = document.getElementById('rotate-btn');
+    const rotateText = document.getElementById('rotate-text');
+    const mirrorBtn = document.getElementById('mirror-btn');
+    const resetBtn = document.getElementById('reset-btn');
 
     // Freeze Watchdog State
     let lastFramePresentedTime = 0;
@@ -401,6 +480,24 @@
     let isStreamFrozen = false;
     let freezeWatchdogInterval = null;
     let prevFramesDecoded = 0;
+
+    // Video Transform & View State (Rotate, Mirror, Zoom, Pan)
+    const savedRotation = parseInt(localStorage.getItem('webcam_rotation') || '0', 10);
+    const savedMirror = localStorage.getItem('webcam_mirror') === 'true';
+    let rotation = [0, 90, 180, 270].includes(savedRotation) ? savedRotation : 0;
+    let isMirrored = savedMirror;
+    let zoom = 1.0;
+    let panX = 0;
+    let panY = 0;
+    let Dw = 0;
+    let Dh = 0;
+    let isDragging = false;
+    let startPointerX = 0;
+    let startPointerY = 0;
+    let startPanX = 0;
+    let startPanY = 0;
+    let prevVw = 0;
+    let prevVh = 0;
 
     function onFramePresented(now, metadata) {
       if (metadata && typeof metadata.presentedFrames === 'number') {
@@ -419,6 +516,12 @@
 
       if (isStreamFrozen) {
         setFrozenState(false);
+      }
+
+      if (remoteVideo.videoWidth && (remoteVideo.videoWidth !== prevVw || remoteVideo.videoHeight !== prevVh)) {
+        prevVw = remoteVideo.videoWidth;
+        prevVh = remoteVideo.videoHeight;
+        updateVideoTransform();
       }
 
       if ('requestVideoFrameCallback' in remoteVideo) {
@@ -636,11 +739,14 @@
       waitingPanel.classList.add('hidden');
       remoteVideo.classList.add('active');
       videoHud.classList.add('active');
+      updateVideoTransform();
     }
 
     function resetUI() {
       stopFreezeWatchdog();
       lastPresentedFrameId = -1;
+      prevVw = 0;
+      prevVh = 0;
       closePeerConnection();
       stopStatsTelemetry();
       remoteVideo.srcObject = null;
@@ -737,19 +843,303 @@
       }
     }
 
+    // Video Transform & View Manipulation (Rotate, Mirror, Zoom, Pan)
+    function updateVideoTransform(withTransition = false) {
+      if (!viewportContainer) return;
+
+      const Cw = viewportContainer.clientWidth;
+      const Ch = viewportContainer.clientHeight;
+      if (!Cw || !Ch) return;
+
+      const Vw = remoteVideo.videoWidth || 16;
+      const Vh = remoteVideo.videoHeight || 9;
+
+      const isRotated90 = (rotation % 180 !== 0);
+      const streamAspect = isRotated90 ? (Vh / Vw) : (Vw / Vh);
+      const containerAspect = Cw / Ch;
+
+      if (containerAspect > streamAspect) {
+        Dh = Ch;
+        Dw = Ch * streamAspect;
+      } else {
+        Dw = Cw;
+        Dh = Cw / streamAspect;
+      }
+
+      const elemWidth = isRotated90 ? Dh : Dw;
+      const elemHeight = isRotated90 ? Dw : Dh;
+
+      remoteVideo.style.width = Math.round(elemWidth) + 'px';
+      remoteVideo.style.height = Math.round(elemHeight) + 'px';
+
+      applyTransform(withTransition);
+    }
+
+    function clampPan() {
+      if (zoom <= 1) {
+        panX = 0;
+        panY = 0;
+        return;
+      }
+      const Cw = viewportContainer.clientWidth || 800;
+      const Ch = viewportContainer.clientHeight || 600;
+
+      // Allow dragging so that corners of zoomed video can easily reach center or across
+      const maxPanX = Math.max(0, (Dw * zoom) / 2 + Cw * 0.25);
+      const maxPanY = Math.max(0, (Dh * zoom) / 2 + Ch * 0.25);
+
+      panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
+      panY = Math.max(-maxPanY, Math.min(maxPanY, panY));
+    }
+
+    function applyTransform(withTransition = false) {
+      clampPan();
+
+      if (withTransition) {
+        remoteVideo.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)';
+      } else {
+        remoteVideo.style.transition = 'none';
+      }
+
+      const flipScaleX = isMirrored ? -1 : 1;
+      remoteVideo.style.transform = `translate(${Math.round(panX)}px, ${Math.round(panY)}px) rotate(${rotation}deg) scale(${flipScaleX * zoom}, ${zoom})`;
+
+      if (zoom > 1) {
+        viewportContainer.style.cursor = isDragging ? 'grabbing' : 'grab';
+      } else {
+        viewportContainer.style.cursor = 'default';
+      }
+
+      updateHUDControls();
+    }
+
+    function updateHUDControls() {
+      if (zoomLabel) {
+        zoomLabel.textContent = zoom === 1 ? '1.0×' : `${zoom.toFixed(1)}×`;
+      }
+      if (rotateBtn && rotateText) {
+        if (rotation !== 0) {
+          rotateText.textContent = `Rotate ${rotation}°`;
+          rotateBtn.classList.add('active-toggle');
+        } else {
+          rotateText.textContent = 'Rotate';
+          rotateBtn.classList.remove('active-toggle');
+        }
+      }
+      if (mirrorBtn) {
+        if (isMirrored) {
+          mirrorBtn.classList.add('active-toggle');
+        } else {
+          mirrorBtn.classList.remove('active-toggle');
+        }
+      }
+      if (resetBtn) {
+        const isModified = (zoom !== 1 || rotation !== 0 || isMirrored || panX !== 0 || panY !== 0);
+        if (isModified) {
+          resetBtn.classList.add('has-modifications');
+        } else {
+          resetBtn.classList.remove('has-modifications');
+        }
+      }
+    }
+
+    function rotateCW() {
+      rotation = (rotation + 90) % 360;
+      localStorage.setItem('webcam_rotation', rotation);
+      updateVideoTransform(true);
+    }
+
+    function rotateCCW() {
+      rotation = (rotation + 270) % 360;
+      localStorage.setItem('webcam_rotation', rotation);
+      updateVideoTransform(true);
+    }
+
+    function toggleMirror() {
+      isMirrored = !isMirrored;
+      localStorage.setItem('webcam_mirror', isMirrored);
+      applyTransform(true);
+    }
+
+    function setZoom(newZoom, mouseX = 0, mouseY = 0, withTransition = false) {
+      const minZoom = 1.0;
+      const maxZoom = 10.0;
+      newZoom = Math.max(minZoom, Math.min(maxZoom, Math.round(newZoom * 10) / 10));
+
+      if (newZoom === zoom && newZoom === 1.0 && panX === 0 && panY === 0) return;
+
+      if (newZoom === 1.0) {
+        panX = 0;
+        panY = 0;
+      } else if (zoom > 0) {
+        const scaleRatio = newZoom / zoom;
+        panX = mouseX - (mouseX - panX) * scaleRatio;
+        panY = mouseY - (mouseY - panY) * scaleRatio;
+      }
+
+      zoom = newZoom;
+      applyTransform(withTransition);
+    }
+
+    function zoomIn() {
+      const nextZoom = zoom < 2 ? zoom + 0.25 : zoom + 0.5;
+      setZoom(nextZoom, 0, 0, true);
+    }
+
+    function zoomOut() {
+      const nextZoom = zoom <= 2 ? zoom - 0.25 : zoom - 0.5;
+      setZoom(nextZoom, 0, 0, true);
+    }
+
+    function resetTransforms() {
+      rotation = 0;
+      isMirrored = false;
+      zoom = 1.0;
+      panX = 0;
+      panY = 0;
+      localStorage.removeItem('webcam_rotation');
+      localStorage.removeItem('webcam_mirror');
+      updateVideoTransform(true);
+    }
+
+    // Drag to Pan
+    viewportContainer.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('#video-hud, #stats-overlay, #freeze-alert, #waiting-panel')) return;
+      if (!remoteVideo.classList.contains('active')) return;
+
+      isDragging = true;
+      startPointerX = e.clientX;
+      startPointerY = e.clientY;
+      startPanX = panX;
+      startPanY = panY;
+      try {
+        viewportContainer.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      if (zoom > 1) {
+        viewportContainer.style.cursor = 'grabbing';
+      }
+    });
+
+    viewportContainer.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      if (zoom <= 1) return;
+      const dx = e.clientX - startPointerX;
+      const dy = e.clientY - startPointerY;
+      panX = startPanX + dx;
+      panY = startPanY + dy;
+      applyTransform(false);
+    });
+
+    function handlePointerUp(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      try {
+        viewportContainer.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+      applyTransform(true);
+    }
+
+    viewportContainer.addEventListener('pointerup', handlePointerUp);
+    viewportContainer.addEventListener('pointercancel', handlePointerUp);
+
+    // Mouse Wheel Zoom
+    viewportContainer.addEventListener('wheel', (e) => {
+      if (e.target.closest('#video-hud, #stats-overlay, #freeze-alert, #waiting-panel')) return;
+      if (!remoteVideo.classList.contains('active')) return;
+      e.preventDefault();
+
+      const rect = viewportContainer.getBoundingClientRect();
+      const mouseX = e.clientX - (rect.left + rect.width / 2);
+      const mouseY = e.clientY - (rect.top + rect.height / 2);
+
+      const zoomFactor = e.deltaY < 0 ? 1.15 : (1 / 1.15);
+      setZoom(zoom * zoomFactor, mouseX, mouseY, false);
+    }, { passive: false });
+
+    // Double-click to toggle 1x / 2x zoom
+    viewportContainer.addEventListener('dblclick', (e) => {
+      if (e.target.closest('#video-hud, #stats-overlay, #freeze-alert, #waiting-panel')) return;
+      if (!remoteVideo.classList.contains('active')) return;
+
+      if (zoom > 1 || panX !== 0 || panY !== 0) {
+        setZoom(1.0, 0, 0, true);
+      } else {
+        const rect = viewportContainer.getBoundingClientRect();
+        const mouseX = e.clientX - (rect.left + rect.width / 2);
+        const mouseY = e.clientY - (rect.top + rect.height / 2);
+        setZoom(2.0, mouseX, mouseY, true);
+      }
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (!remoteVideo.classList.contains('active')) return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        if (e.shiftKey) rotateCCW();
+        else rotateCW();
+      } else if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMirror();
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        resetTransforms();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        if (zoom > 1) {
+          e.preventDefault();
+          const step = 50;
+          if (e.key === 'ArrowUp') panY += step;
+          if (e.key === 'ArrowDown') panY -= step;
+          if (e.key === 'ArrowLeft') panX += step;
+          if (e.key === 'ArrowRight') panX -= step;
+          applyTransform(true);
+        }
+      }
+    });
+
+    // Window & Fullscreen Resize
+    window.addEventListener('resize', () => updateVideoTransform(false));
+    document.addEventListener('fullscreenchange', () => updateVideoTransform(false));
+    remoteVideo.addEventListener('loadedmetadata', () => updateVideoTransform(false));
+    remoteVideo.addEventListener('resize', () => updateVideoTransform(false));
+
     function takeSnapshot() {
-      if (!remoteVideo.videoWidth) return;
+      if (!remoteVideo.videoWidth || !remoteVideo.videoHeight) return;
+
+      const vw = remoteVideo.videoWidth;
+      const vh = remoteVideo.videoHeight;
+      const isRotated90 = (rotation % 180 !== 0);
+
       const canvas = document.createElement('canvas');
-      canvas.width = remoteVideo.videoWidth;
-      canvas.height = remoteVideo.videoHeight;
+      canvas.width = isRotated90 ? vh : vw;
+      canvas.height = isRotated90 ? vw : vh;
+
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.scale(isMirrored ? -1 : 1, 1);
+      ctx.drawImage(remoteVideo, -vw / 2, -vh / 2, vw, vh);
 
       const a = document.createElement('a');
       a.download = `snapshot-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
       a.href = canvas.toDataURL('image/png');
       a.click();
     }
+
+    // Initial HUD update
+    updateHUDControls();
   </script>
 </body>
 </html>
